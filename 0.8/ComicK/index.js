@@ -9921,7 +9921,7 @@ const uploadersSettings = (stateManager) => {
                     rows: async () => [
                         App.createDUISwitch({
                             id: 'toggle_uploaders_auto_filtering',
-                            label: 'Enable Uploader filtering',
+                            label: 'Enable Uploader auto-filtering',
                             value: App.createDUIBinding({
                                 get: () => getUploadersAutoFiltering(stateManager),
                                 set: async (newValue) => await stateManager.store('uploaders_auto_filtering', newValue)

@@ -8978,7 +8978,7 @@ class ComicK {
     async getChapters(mangaId) {
         const showTitle = await this.stateManager.retrieve('show_title') ?? false;
         const showVol = await this.stateManager.retrieve('show_volume_number') ?? false;
-        const uploadersAutoFiltering = await this.stateManager.retrieve('uploaders_auto_filtering') ?? false;
+        const autofilterChaptersByScore = await this.stateManager.retrieve('filter_chapters_by_score') ?? false;
         const uploadersToggled = await this.stateManager.retrieve('uploaders_toggled') ?? false;
         const uploadersWhitelisted = await this.stateManager.retrieve('uploaders_whitelisted') ?? false;
         const aggressiveUploadersFilter = await this.stateManager.retrieve('aggressive_uploaders_filtering') ?? false;
@@ -8987,14 +8987,14 @@ class ComicK {
         const chapters = [];
         let page = 1;
         let data = await this.createChapterRequest(mangaId, page++);
-        (0, ComicKParser_1.parseChapters)(chapters, data, showTitle, showVol, uploadersAutoFiltering, uploadersToggled, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders);
+        (0, ComicKParser_1.parseChapters)(chapters, data, showTitle, showVol, autofilterChaptersByScore, uploadersToggled, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders);
         // Try next page if number of chapters is same as limit
         while (data.chapters.length === LIMIT) {
             data = await this.createChapterRequest(mangaId, page++);
             // Break if there are no more chapters
             if (data.chapters.length === 0)
                 break;
-            (0, ComicKParser_1.parseChapters)(chapters, data, showTitle, showVol, uploadersAutoFiltering, uploadersToggled, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders);
+            (0, ComicKParser_1.parseChapters)(chapters, data, showTitle, showVol, autofilterChaptersByScore, uploadersToggled, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders);
         }
         return chapters;
     }
@@ -9547,15 +9547,18 @@ const parseMangaDetails = (data, mangaId) => {
     });
 };
 exports.parseMangaDetails = parseMangaDetails;
-const parseChapters = (chapters, data, showTitle, showVol, uploadersAutoFiltering, uploadersToggled, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders) => {
-    let filteredChapters = data.chapters;
-    if (uploadersAutoFiltering) {
-        filteredChapters = filterUploadersByScore(data.chapters);
+const parseChapters = (chapters, data, showTitle, showVol, autofilterChaptersByScore, uploadersToggled, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders) => {
+    const chaptersData = [];
+    if (autofilterChaptersByScore) {
+        filterChaptersByScore(data.chapters, chaptersData);
     }
     else if (uploadersToggled && uploaders.length > 0) {
-        filteredChapters = filterUploadersByList(data.chapters, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders);
+        filterChaptersByUploaderList(data.chapters, chaptersData, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders);
     }
-    for (const chapter of filteredChapters) {
+    else {
+        chaptersData.push(...data.chapters);
+    }
+    for (const chapter of chaptersData) {
         const id = chapter?.hid ?? '';
         const chap = chapter?.chap;
         const vol = chapter?.vol;
@@ -9579,9 +9582,9 @@ const parseChapters = (chapters, data, showTitle, showVol, uploadersAutoFilterin
     }
 };
 exports.parseChapters = parseChapters;
-const filterUploadersByScore = (chapters) => {
+const filterChaptersByScore = (unfilteredChapters, chapters) => {
     const chapterMap = new Map();
-    for (const chapter of chapters) {
+    for (const chapter of unfilteredChapters) {
         const chapNum = Number(chapter?.chap);
         const chapterScore = chapter.up_count - chapter.down_count;
         if (chapterMap.has(chapNum)) {
@@ -9593,10 +9596,10 @@ const filterUploadersByScore = (chapters) => {
             chapterMap.set(chapNum, { score: chapterScore, chapter: chapter });
         }
     }
-    return Array.from(chapterMap.values(), ((mapValue) => mapValue.chapter));
+    chapters.push(...Array.from(chapterMap.values(), ((mapValue) => mapValue.chapter)));
 };
-const filterUploadersByList = (chapters, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders) => {
-    return chapters.filter((chapter) => {
+const filterChaptersByUploaderList = (unfilteredChapters, chapters, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders) => {
+    chapters.push(...unfilteredChapters.filter((chapter) => {
         const groups = [];
         if (chapter?.group_name) {
             for (const group of chapter.group_name) {
@@ -9632,7 +9635,7 @@ const filterUploadersByList = (chapters, uploadersWhitelisted, aggressiveUploade
             }
         }
         return true;
-    });
+    }));
 };
 const parseChapterDetails = (data, mangaId, chapterId) => {
     const pages = [];
@@ -9831,8 +9834,8 @@ const showTitle = async (stateManager) => {
 const showVolumeNumber = async (stateManager) => {
     return (await stateManager.retrieve('show_volume_number') ?? false);
 };
-const getUploadersAutoFiltering = async (stateManager) => {
-    return (await stateManager.retrieve('uploaders_auto_filtering') ?? false);
+const getFilterChaptersByScore = async (stateManager) => {
+    return (await stateManager.retrieve('filter_chapters_by_score') ?? false);
 };
 const chapterSettings = (stateManager) => {
     return App.createDUINavigationButton({
@@ -9917,16 +9920,16 @@ const uploadersSettings = (stateManager) => {
             sections: async () => [
                 App.createDUISection({
                     id: 'uploaders_autofiltering',
-                    header: 'Automatic Uploader Filtering',
+                    header: 'Autofilter uploaders by score',
                     footer: 'If enabled, automatically filter uploaders for each chapter\nFor each chapter number, only the uploader with the most upvotes will be displayed.\nIf this is enabled, the below settings will be completely ignored.',
                     isHidden: false,
                     rows: async () => [
                         App.createDUISwitch({
-                            id: 'toggle_uploaders_auto_filtering',
-                            label: 'Enable Uploader auto-filtering',
+                            id: 'toggle_filter_chapters_by_score',
+                            label: 'Enable score-based auto-filtering',
                             value: App.createDUIBinding({
-                                get: () => getUploadersAutoFiltering(stateManager),
-                                set: async (newValue) => await stateManager.store('uploaders_auto_filtering', newValue)
+                                get: () => getFilterChaptersByScore(stateManager),
+                                set: async (newValue) => await stateManager.store('filter_chapters_by_score', newValue)
                             })
                         })
                     ]
@@ -10050,7 +10053,7 @@ const resetSettings = (stateManager) => {
                 stateManager.store('show_title', null),
                 stateManager.store('languages', null),
                 stateManager.store('language_home_filter', null),
-                stateManager.store('uploaders_auto_filtering', null),
+                stateManager.store('filter_chapters_by_score', null),
                 stateManager.store('uploaders', null),
                 stateManager.store('uploaders_whitelisted', null),
                 stateManager.store('aggressive_uploaders_filtering', null),

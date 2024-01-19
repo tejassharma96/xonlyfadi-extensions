@@ -9469,7 +9469,7 @@ exports.CMLanguages = new LanguagesClass;
 },{}],97:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.parseSearch = exports.parseHomeSections = exports.parseTags = exports.parseChapterDetails = exports.bridgeChapterData = exports.parseChapters = exports.parseMangaDetails = void 0;
+exports.parseSearch = exports.parseHomeSections = exports.parseTags = exports.parseChapterDetails = exports.parseChapters = exports.parseMangaDetails = void 0;
 const types_1 = require("@paperback/types");
 const ComicKHelper_1 = require("./ComicKHelper");
 const entities_1 = require("entities");
@@ -9548,90 +9548,92 @@ const parseMangaDetails = (data, mangaId) => {
 };
 exports.parseMangaDetails = parseMangaDetails;
 const parseChapters = (chapters, data, showTitle, showVol, uploadersAutoFiltering, uploadersToggled, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders) => {
+    var filteredChapters = data.chapters;
     if (uploadersAutoFiltering) {
-        const _chapters = new Map();
-        for (const chapter of data.chapters) {
-            const chapNum = Number(chapter?.chap);
-            const chapterScore = chapter.up_count - chapter.down_count;
-            if (_chapters.has(chapNum)) {
-                if (chapterScore > _chapters.get(chapNum).score) {
-                    _chapters.set(chapNum, { score: chapterScore, chapter: chapter });
-                }
-            }
-            else {
-                _chapters.set(chapNum, { score: chapterScore, chapter: chapter });
-            }
-        }
-        for (const value of _chapters.values()) {
-            chapters.push((0, exports.bridgeChapterData)(value.chapter, showTitle, showVol));
-        }
+        filteredChapters = filterUploadersByScore(data.chapters);
     }
-    else {
-        for (const chapter of data.chapters) {
-            const groups = [];
-            if (chapter?.group_name) {
-                for (const group of chapter.group_name) {
-                    groups.push(group);
-                }
+    else if (uploadersToggled && uploaders.length > 0) {
+        filteredChapters = filterUploadersByList(data.chapters, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders);
+    }
+    for (const chapter of filteredChapters) {
+        const id = chapter?.hid ?? '';
+        const chap = chapter?.chap;
+        const vol = chapter?.vol;
+        const chapNum = Number(chap);
+        const volume = Number(vol);
+        const groups = [];
+        if (chapter?.group_name) {
+            for (const group of chapter.group_name) {
+                groups.push(group);
             }
-            if (uploadersToggled && uploaders.length > 0) {
-                if (aggressiveUploadersFilter) {
-                    if (uploadersWhitelisted) {
-                        // We check if that if the chapter does not have any of the uploaders in the list, we don't push it (we only allow chapters that have all the uploaders in the whitelist)
-                        if (!groups.every(group => uploaders.some(uploader => (strictNameMatching && (uploader === group) || (!strictNameMatching && uploader.toLowerCase().includes(group.toLowerCase())))))) {
-                            continue;
-                        }
-                    }
-                    else {
-                        // We check if that if the chapter has even a single uploader in the list, we don't push it (we only allow chapters that have none of the uploaders in the blacklist)
-                        if (groups.some(group => uploaders.some(uploader => (strictNameMatching && (uploader === group) || (!strictNameMatching && uploader.toLowerCase().includes(group.toLowerCase())))))) {
-                            continue;
-                        }
-                    }
-                }
-                else {
-                    if (uploadersWhitelisted) {
-                        // We check if that if the chapter does not have any of the uploaders in the list, we don't push it (we only allow chapters that have all the uploaders in the whitelist)
-                        if (!groups.some(group => uploaders.some(uploader => (strictNameMatching && (uploader === group) || (!strictNameMatching && uploader.toLowerCase().includes(group.toLowerCase())))))) {
-                            continue;
-                        }
-                    }
-                    else {
-                        // Only if all the uploaders are in the blacklist, we don't push the chapter
-                        if (groups.every(group => uploaders.some(uploader => (strictNameMatching && (uploader === group) || (!strictNameMatching && uploader.toLowerCase().includes(group.toLowerCase())))))) {
-                            continue;
-                        }
-                    }
-                }
-            }
-            chapters.push((0, exports.bridgeChapterData)(chapter, showTitle, showVol));
         }
+        chapters.push(App.createChapter({
+            id,
+            name: `Chapter ${chap}${showTitle ? chapter?.title ? `: ${chapter?.title}` : '' : ''}`,
+            chapNum: chapNum,
+            volume: showVol ? !isNaN(volume) ? volume : undefined : undefined,
+            time: new Date(chapter?.created_at),
+            group: groups?.length !== 0 ? groups?.join(',') : '',
+            langCode: ComicKHelper_1.CMLanguages?.getEmoji(chapter?.lang)
+        }));
     }
 };
 exports.parseChapters = parseChapters;
-const bridgeChapterData = (chapter, showTitle, showVol) => {
-    const id = chapter?.hid ?? '';
-    const chap = chapter?.chap;
-    const vol = chapter?.vol;
-    const chapNum = Number(chap);
-    const volume = Number(vol);
-    const groups = [];
-    if (chapter?.group_name) {
-        for (const group of chapter.group_name) {
-            groups.push(group);
+const filterUploadersByScore = (chapters) => {
+    const chapterMap = new Map();
+    for (const chapter of chapters) {
+        const chapNum = Number(chapter?.chap);
+        const chapterScore = chapter.up_count - chapter.down_count;
+        if (chapterMap.has(chapNum)) {
+            if (chapterScore > chapterMap.get(chapNum).score) {
+                chapterMap.set(chapNum, { score: chapterScore, chapter: chapter });
+            }
+        }
+        else {
+            chapterMap.set(chapNum, { score: chapterScore, chapter: chapter });
         }
     }
-    return App.createChapter({
-        id,
-        name: `Chapter ${chap}${showTitle ? chapter?.title ? `: ${chapter?.title}` : '' : ''}`,
-        chapNum: chapNum,
-        volume: showVol ? !isNaN(volume) ? volume : undefined : undefined,
-        time: new Date(chapter?.created_at),
-        group: groups?.length !== 0 ? groups?.join(',') : '',
-        langCode: ComicKHelper_1.CMLanguages?.getEmoji(chapter?.lang)
+    return Array.from(chapterMap.values(), ((mapValue) => mapValue.chapter));
+};
+const filterUploadersByList = (chapters, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders) => {
+    return chapters.filter((chapter) => {
+        const groups = [];
+        if (chapter?.group_name) {
+            for (const group of chapter.group_name) {
+                groups.push(group);
+            }
+        }
+        if (aggressiveUploadersFilter) {
+            if (uploadersWhitelisted) {
+                // We check if that if the chapter does not have any of the uploaders in the list, we don't push it (we only allow chapters that have all the uploaders in the whitelist)
+                if (!groups.every(group => uploaders.some(uploader => (strictNameMatching && (uploader === group) || (!strictNameMatching && uploader.toLowerCase().includes(group.toLowerCase())))))) {
+                    return false;
+                }
+            }
+            else {
+                // We check if that if the chapter has even a single uploader in the list, we don't push it (we only allow chapters that have none of the uploaders in the blacklist)
+                if (groups.some(group => uploaders.some(uploader => (strictNameMatching && (uploader === group) || (!strictNameMatching && uploader.toLowerCase().includes(group.toLowerCase())))))) {
+                    return false;
+                }
+            }
+        }
+        else {
+            if (uploadersWhitelisted) {
+                // We check if that if the chapter does not have any of the uploaders in the list, we don't push it (we only allow chapters that have all the uploaders in the whitelist)
+                if (!groups.some(group => uploaders.some(uploader => (strictNameMatching && (uploader === group) || (!strictNameMatching && uploader.toLowerCase().includes(group.toLowerCase())))))) {
+                    return false;
+                }
+            }
+            else {
+                // Only if all the uploaders are in the blacklist, we don't push the chapter
+                if (groups.every(group => uploaders.some(uploader => (strictNameMatching && (uploader === group) || (!strictNameMatching && uploader.toLowerCase().includes(group.toLowerCase())))))) {
+                    return false;
+                }
+            }
+        }
+        return true;
     });
 };
-exports.bridgeChapterData = bridgeChapterData;
 const parseChapterDetails = (data, mangaId, chapterId) => {
     const pages = [];
     for (const images of data.chapter.images) {

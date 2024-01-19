@@ -9548,7 +9548,7 @@ const parseMangaDetails = (data, mangaId) => {
 };
 exports.parseMangaDetails = parseMangaDetails;
 const parseChapters = (chapters, data, showTitle, showVol, uploadersAutoFiltering, uploadersToggled, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders) => {
-    var filteredChapters = data.chapters;
+    let filteredChapters = data.chapters;
     if (uploadersAutoFiltering) {
         filteredChapters = filterUploadersByScore(data.chapters);
     }

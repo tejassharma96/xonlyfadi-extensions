@@ -8978,7 +8978,7 @@ class ComicK {
     async getChapters(mangaId) {
         const showTitle = await this.stateManager.retrieve('show_title') ?? false;
         const showVol = await this.stateManager.retrieve('show_volume_number') ?? false;
-        const autofilterChaptersByScore = await this.stateManager.retrieve('filter_chapters_by_score') ?? false;
+        const chapterScoreFiltering = await this.stateManager.retrieve('chapter_score_filtering') ?? false;
         const uploadersToggled = await this.stateManager.retrieve('uploaders_toggled') ?? false;
         const uploadersWhitelisted = await this.stateManager.retrieve('uploaders_whitelisted') ?? false;
         const aggressiveUploadersFilter = await this.stateManager.retrieve('aggressive_uploaders_filtering') ?? false;
@@ -8987,14 +8987,14 @@ class ComicK {
         const chapters = [];
         let page = 1;
         let data = await this.createChapterRequest(mangaId, page++);
-        (0, ComicKParser_1.parseChapters)(chapters, data, showTitle, showVol, autofilterChaptersByScore, uploadersToggled, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders);
+        (0, ComicKParser_1.parseChapters)(chapters, data, showTitle, showVol, chapterScoreFiltering, uploadersToggled, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders);
         // Try next page if number of chapters is same as limit
         while (data.chapters.length === LIMIT) {
             data = await this.createChapterRequest(mangaId, page++);
             // Break if there are no more chapters
             if (data.chapters.length === 0)
                 break;
-            (0, ComicKParser_1.parseChapters)(chapters, data, showTitle, showVol, autofilterChaptersByScore, uploadersToggled, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders);
+            (0, ComicKParser_1.parseChapters)(chapters, data, showTitle, showVol, chapterScoreFiltering, uploadersToggled, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders);
         }
         return chapters;
     }
@@ -9547,9 +9547,9 @@ const parseMangaDetails = (data, mangaId) => {
     });
 };
 exports.parseMangaDetails = parseMangaDetails;
-const parseChapters = (chapters, data, showTitle, showVol, autofilterChaptersByScore, uploadersToggled, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders) => {
+const parseChapters = (chapters, data, showTitle, showVol, chapterScoreFiltering, uploadersToggled, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders) => {
     const chaptersData = [];
-    if (autofilterChaptersByScore) {
+    if (chapterScoreFiltering) {
         filterChaptersByScore(data.chapters, chaptersData);
     }
     else if (uploadersToggled && uploaders.length > 0) {
@@ -9582,9 +9582,9 @@ const parseChapters = (chapters, data, showTitle, showVol, autofilterChaptersByS
     }
 };
 exports.parseChapters = parseChapters;
-const filterChaptersByScore = (unfilteredChapters, chapters) => {
+const filterChaptersByScore = (chapterData, chapters) => {
     const chapterMap = new Map();
-    for (const chapter of unfilteredChapters) {
+    for (const chapter of chapterData) {
         const chapNum = Number(chapter?.chap);
         const chapterScore = chapter.up_count - chapter.down_count;
         if (chapterMap.has(chapNum)) {
@@ -9598,8 +9598,8 @@ const filterChaptersByScore = (unfilteredChapters, chapters) => {
     }
     chapters.push(...Array.from(chapterMap.values(), ((mapValue) => mapValue.chapter)));
 };
-const filterChaptersByUploaderList = (unfilteredChapters, chapters, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders) => {
-    chapters.push(...unfilteredChapters.filter((chapter) => {
+const filterChaptersByUploaderList = (chapterData, chapters, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders) => {
+    chapters.push(...chapterData.filter((chapter) => {
         const groups = [];
         if (chapter?.group_name) {
             for (const group of chapter.group_name) {
@@ -9834,8 +9834,8 @@ const showTitle = async (stateManager) => {
 const showVolumeNumber = async (stateManager) => {
     return (await stateManager.retrieve('show_volume_number') ?? false);
 };
-const getFilterChaptersByScore = async (stateManager) => {
-    return (await stateManager.retrieve('filter_chapters_by_score') ?? false);
+const getChapterScoreFiltering = async (stateManager) => {
+    return (await stateManager.retrieve('chapter_score_filtering') ?? false);
 };
 const chapterSettings = (stateManager) => {
     return App.createDUINavigationButton({
@@ -9919,17 +9919,17 @@ const uploadersSettings = (stateManager) => {
         form: App.createDUIForm({
             sections: async () => [
                 App.createDUISection({
-                    id: 'uploaders_autofiltering',
-                    header: 'Autofilter uploaders by score',
-                    footer: 'If enabled, automatically filter uploaders for each chapter\nFor each chapter number, only the uploader with the most upvotes will be displayed.\nIf this is enabled, the below settings will be disabled.\nDisable this setting to manually manage uploader filtering.',
+                    id: 'chapter_score_filtering',
+                    header: 'Filter Chapters by Score',
+                    footer: 'Show only the uploader with the most upvotes for each chapter.\nDisable to manually manage uploader filtering.',
                     isHidden: false,
                     rows: async () => [
                         App.createDUISwitch({
-                            id: 'toggle_filter_chapters_by_score',
-                            label: 'Enable score-based auto-filtering',
+                            id: 'toggle_chapter_score_filtering',
+                            label: 'Enable Chapter Score Filtering',
                             value: App.createDUIBinding({
-                                get: () => getFilterChaptersByScore(stateManager),
-                                set: async (newValue) => await stateManager.store('filter_chapters_by_score', newValue)
+                                get: () => getChapterScoreFiltering(stateManager),
+                                set: async (newValue) => await stateManager.store('chapter_score_filtering', newValue)
                             })
                         })
                     ]
@@ -9937,7 +9937,7 @@ const uploadersSettings = (stateManager) => {
                 App.createDUISection({
                     id: 'modify_uploaders',
                     header: 'Uploaders',
-                    isHidden: await getFilterChaptersByScore(stateManager),
+                    isHidden: await getChapterScoreFiltering(stateManager),
                     rows: async () => [
                         App.createDUISelect({
                             id: 'uploaders',
@@ -10001,7 +10001,7 @@ const uploadersSettings = (stateManager) => {
                     id: 'select_uploaders',
                     header: 'Filtering Settings',
                     footer: 'Filter Uploaders by name.\nBy default, selected uploaders are excluded from chapter lists (blacklist mode).',
-                    isHidden: await getFilterChaptersByScore(stateManager),
+                    isHidden: await getChapterScoreFiltering(stateManager),
                     rows: async () => [
                         App.createDUISwitch({
                             id: 'toggle_uploaders_filtering',
@@ -10053,7 +10053,7 @@ const resetSettings = (stateManager) => {
                 stateManager.store('show_title', null),
                 stateManager.store('languages', null),
                 stateManager.store('language_home_filter', null),
-                stateManager.store('filter_chapters_by_score', null),
+                stateManager.store('chapter_score_filtering', null),
                 stateManager.store('uploaders', null),
                 stateManager.store('uploaders_whitelisted', null),
                 stateManager.store('aggressive_uploaders_filtering', null),

@@ -9584,22 +9584,24 @@ const parseChapters = (chapters, data, showTitle, showVol, chapterScoreFiltering
 exports.parseChapters = parseChapters;
 const filterChaptersByScore = (chapterData, chapters) => {
     const chapterMap = new Map();
-    for (const [index, chapter] of chapterData.entries()) {
+    for (const chapter of chapterData) {
         const chapNum = Number(chapter?.chap);
         const chapterScore = chapter.up_count - chapter.down_count;
         if (chapterMap.has(chapNum)) {
             if (chapterScore > chapterMap.get(chapNum).score) {
-                chapterMap.set(chapNum, { score: chapterScore, chapterIndex: index });
+                chapterMap.set(chapNum, { score: chapterScore, chapter: chapter });
             }
         }
         else {
-            chapterMap.set(chapNum, { score: chapterScore, chapterIndex: index });
+            chapterMap.set(chapNum, { score: chapterScore, chapter: chapter });
         }
     }
-    chapters.push(...Array.from(chapterMap.values(), ((mapValue) => chapterData[mapValue.chapterIndex])));
+    chapterMap.forEach(mapValue => {
+        chapters.push(mapValue.chapter);
+    });
 };
 const filterChaptersByUploaderList = (chapterData, chapters, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders) => {
-    chapters.push(...chapterData.filter((chapter) => {
+    chapterData.filter((chapter) => {
         const groups = [];
         if (chapter?.group_name) {
             for (const group of chapter.group_name) {
@@ -9635,7 +9637,9 @@ const filterChaptersByUploaderList = (chapterData, chapters, uploadersWhiteliste
             }
         }
         return true;
-    }));
+    }).forEach(chapter => {
+        chapters.push(chapter);
+    });
 };
 const parseChapterDetails = (data, mangaId, chapterId) => {
     const pages = [];

@@ -9556,7 +9556,9 @@ const parseChapters = (chapters, data, showTitle, showVol, chapterScoreFiltering
         filterChaptersByUploaderList(data.chapters, chaptersData, uploadersWhitelisted, aggressiveUploadersFilter, strictNameMatching, uploaders);
     }
     else {
-        chaptersData.push(...data.chapters);
+        data.chapters.forEach(chapter => {
+            chaptersData.push(chapter);
+        });
     }
     for (const chapter of chaptersData) {
         const id = chapter?.hid ?? '';
